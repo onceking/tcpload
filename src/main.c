@@ -31,7 +31,6 @@
 
 char const* REQST_STRS[] = {"SLEEP", "BEGIN", "CONNECTING", "CONNECTED",
 			    "SENDING_HEADER", "SENT_HEADER",
-			    "SENDING_FILE", "SENT_FILE",
 			    "READING_RESP", "READ_RESP",
 			    "END"};
 
@@ -40,8 +39,6 @@ int main(int argc, char* argv[])
 	struct request* reqs[100];
 	int reqlen = 0;
 
-	struct file* files[100];
-	int filelen = 0;
 	int threads;
 	struct sockaddr_in sockaddr;
 
@@ -50,14 +47,13 @@ int main(int argc, char* argv[])
 
 	int i;
 
-	if (argc <= 5) {
-		printf("Usage: %s Threads IP PORT PATH img1 img2 ...\n"
+	if (argc <= 4) {
+		printf("Usage: %s Threads IP PORT PATH\n"
 		       " Threads: number of concurrent requests to make.\n"
 		       " IP:      IP address of the webserver. (not hostname)\n"
 		       " PORT:    Port of the webserver. (not C++/C server)\n"
 		       " PATH:    path to the php page handling the upload form. (always start with /)\n"
-		       " imgN:    image file names (up to 100).\n"
-		       "Example: %s 2 128.238.63.221 80 /polyflickr/1/upload.php 1.jpg\n"
+		       "Example: %s 2 128.238.63.221 80 /polyflickr/1/upload.php\n"
 		       "         http://128.238.63.221:80/polyflickr/1/upload.php is the PHP page.\n",
 		       argv[0], argv[0]);
 
@@ -83,32 +79,12 @@ int main(int argc, char* argv[])
 	sockaddr.sin_family = AF_INET;
 	sockaddr.sin_port = htons(atoi(argv[3]));
 
-	inet_pton(AF_INET, AD_IP, &(AD_SOCKADDR.sin_addr));
-	AD_SOCKADDR.sin_family = AF_INET;
-	AD_SOCKADDR.sin_port = htons(80);
-
 	for(i=0; i<threads; ++i)
 	{
 		reqs[reqlen] = request_create(argv[4], &sockaddr);
 		assert(reqs[reqlen]);
 		++reqlen;
 	}
-
-	for(i=5; i<argc; ++i)
-	{
-		files[filelen] = file_create(argv[i]);
-		if(NULL != files[filelen])
-		{
-			++filelen;
-			print_dbg("Add %s to file list.", argv[i]);
-		}
-		else
-		{
-			print_dbg("Failed adding %s to file list.",
-				  argv[i]);
-		}
-	}
-	assert(filelen > 0);
 
 
 	srand(time(NULL));
@@ -123,13 +99,11 @@ int main(int argc, char* argv[])
 		for(i=0; i<rdylen; ++i)
 		{
 			struct request* r = (struct request*)(events[i].data.ptr);
-			request_process(r, epollfd, files[rand()%filelen]);
+			request_process(r, epollfd);
 		}
 
 		for(i=0; i<reqlen; ++i)
 			request_cancel_stale(reqs[i], epollfd, 1000*1000);
-
-		// file_set_name(f, rand()%('Z'-'A')+'a');
 	}
 
 	return 0;
