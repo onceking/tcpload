@@ -16,22 +16,22 @@ long file_length(struct file const* f);
 enum {
 	REQST_SLEEP=0,               // so we can slow it down.
 	REQST_BEGIN,           // init, start connecting
-	REQST_CONNECTING,        // wait       
+	REQST_CONNECTING,        // wait
 	REQST_CONNECTED,         // start sending request
 	REQST_HEADER_SENDING,    // wait
 	REQST_HEADER_SENT,       // start sending file
 	REQST_FILE_SENDING,      // wait
 	REQST_FILE_SENT,         // start checking
-	REQST_READING,           // 
+	REQST_READING,           //
 	REQST_READ,
 
 	REQST_ADV_CONNECTING,
-	REQST_ADV_CONNECTED, 
+	REQST_ADV_CONNECTED,
 	REQST_ADV_SENDING,
 	REQST_ADV_SENT,
 
 	REQST_ADC_CONNECTING,
-	REQST_ADC_CONNECTED, 
+	REQST_ADC_CONNECTED,
 	REQST_ADC_SENDING,
 	REQST_ADC_SENT,
 

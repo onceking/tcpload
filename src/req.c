@@ -32,10 +32,10 @@ struct file* file_create(char const* filename)
 		long flen;
 		int pfx_len, sfx_len;
 		const int MAX_OVERHEAD = 1024;
-		
+
 
 		r->content = NULL;
-		
+
 		f = fopen(filename, "rb");
 		if(f == NULL)
 		{
@@ -60,13 +60,13 @@ struct file* file_create(char const* filename)
 			fclose(f);
 			goto error;
 		}
-		
+
 		basename = strrchr(filename, '/');
 		if(basename == NULL)
 			basename = filename;
 		else
 			++basename;
-		pfx_len = snprintf(r->content, MAX_OVERHEAD, 
+		pfx_len = snprintf(r->content, MAX_OVERHEAD,
 				   "--"BOUNDARY"\r\n"
 				   "Content-Disposition: form-data; name=\"image\"; filename=\"X%s\"\r\n"
 				   "Content-Type: image/jpeg\r\n\r\n",
@@ -81,14 +81,14 @@ struct file* file_create(char const* filename)
 		if(1 != fread(r->content+pfx_len, flen, 1, f))
 		{
 			fclose(f);
-			print_dbg("Failed reading %ld bytes from file `%s'", 
+			print_dbg("Failed reading %ld bytes from file `%s'",
 				  flen, filename);
 			goto error;
 		}
 		fclose(f);
 
-		sfx_len = snprintf(r->content+pfx_len+flen, 
-				   MAX_OVERHEAD - pfx_len, 
+		sfx_len = snprintf(r->content+pfx_len+flen,
+				   MAX_OVERHEAD - pfx_len,
 				   "\r\n--"BOUNDARY"--\r\n");
 
 		r->size = pfx_len + flen + sfx_len;
@@ -140,7 +140,7 @@ struct request
 
 
 	long writepos;
-	
+
 	char header[4096];
 	long header_len;
 	struct file const* file;
@@ -152,9 +152,9 @@ struct request
 	long adv_reqlen;
 	char adc_req[512];
 	long adc_reqlen;
-	
+
 	int state;
-	struct timeval state_times[REQST_END+1]; // track timeout 
+	struct timeval state_times[REQST_END+1]; // track timeout
 	struct stat stat;
 };
 
@@ -183,7 +183,7 @@ void request_destroy(struct request* r)
 	free(r);
 }
 
-static int write_and_next(int fd, char const* buf, long* offset, long len, 
+static int write_and_next(int fd, char const* buf, long* offset, long len,
 			  int s_partial, int s_done, int s_fail)
 {
 	int n = write(fd, buf+(*offset), len-(*offset));
@@ -214,7 +214,7 @@ static void request_set_state(struct request* r, int s)
 
 void request_switch_file(struct request* r, struct file const* f)
 {
-	r->header_len = 
+	r->header_len =
 		snprintf(r->header, LEN(r->header),
 			 "POST %s HTTP/1.1\r\n"
 			 "Content-Length: %ld\r\n"
@@ -224,7 +224,7 @@ void request_switch_file(struct request* r, struct file const* f)
 			 "User-Agent: Internet Explorer 1.0\r\n"
 			 "\r\n",
 			 r->path, file_length(f), r->ipstr, ntohs(r->dst.sin_port));
-	
+
 	if(r->header_len >= LEN(r->header))
 	{
 		print_dbg("head buffer too small..");
@@ -243,7 +243,7 @@ void request_connect(struct request* r, struct sockaddr_in const* sa, int epollf
 	if(r->peerfd > 0)
 	{
 		struct epoll_event ev;
-		ev.events = EPOLLOUT; // EPOLLIN | 
+		ev.events = EPOLLOUT; // EPOLLIN |
 		ev.data.ptr = (void*)r;
 		if(0 == epoll_ctl(epollfd, EPOLL_CTL_ADD, r->peerfd, &ev))
 		{
@@ -275,7 +275,7 @@ void request_wakeup(struct request* r, int epollfd)
 	if(r->force_event)
 		request_process(r, epollfd, NULL);
 
-	if(request_current_state(r) == REQST_SLEEP && 
+	if(request_current_state(r) == REQST_SLEEP &&
 	   time_elasped(request_state_time(r, REQST_BEGIN)) >= PERIOD)
 	{
 		request_set_state_event(r, REQST_BEGIN, 1);
@@ -300,12 +300,12 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 		request_set_state(r, write_and_next(
 					  r->peerfd,
 					  r->header, &(r->writepos), r->header_len,
-					  REQST_HEADER_SENDING, 
+					  REQST_HEADER_SENDING,
 					  REQST_HEADER_SENT,
 					  REQST_END));
 		break;
 
-	
+
 	case REQST_HEADER_SENT:
 		if(NULL == r->file)
 		{
@@ -317,9 +317,9 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 	case REQST_FILE_SENDING:
 		request_set_state(r, write_and_next(
 					  r->peerfd,
-					  file_content(r->file), 
+					  file_content(r->file),
 					  &(r->writepos), file_length(r->file),
-					  REQST_FILE_SENDING, 
+					  REQST_FILE_SENDING,
 					  REQST_FILE_SENT,
 					  REQST_END));
 		break;
@@ -347,7 +347,7 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 	case REQST_READING:
 		if(r->resp_len >= LEN(r->resp))
 		{
-			print_dbg("Response [%d>=%lu] too long.", 
+			print_dbg("Response [%d>=%lu] too long.",
 				  r->resp_len, LEN(r->resp));
 			request_set_state_event(r, REQST_END, 1);
 		}
@@ -363,12 +363,12 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 				// fwrite(r->resp + r->resp_len, n, 1, stdout);
 				r->resp_len += n;
 				// search for key words!!
-				tmp = strstr(r->resp, 
+				tmp = strstr(r->resp,
 					     "http://ad.game.pdc.poly.edu"
 					     "/cgi-bin/ad.fcgi?team_id=");
 				if(tmp)
 				{
-					char *end = tmp + 
+					char *end = tmp +
 						strlen("http://ad.game.pdc.poly.edu"
 						       "/cgi-bin/ad.fcgi?team_id=");
 					if(isdigit(end[0]))
@@ -377,7 +377,7 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 							end[2] = '\0';
 						else
 							end[1] = '\0';;
-						
+
 						r->team_id = atoi(end);
 						print_dbg("%p: found ads for team %d",
 							  r, r->team_id);
@@ -409,7 +409,7 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 		close(r->peerfd);
 		if(r->team_id >= 0)
 		{
-			r->adv_reqlen = 
+			r->adv_reqlen =
 				snprintf(r->adv_req, LEN(r->adv_req),
 					 "GET /cgi-bin/ad.fcgi?team_id=%d HTTP/1.1\r\n"
 					 "Host: %s:80\r\n"
@@ -417,7 +417,7 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 					 "\r\n",
 					 r->team_id, AD_IP);
 
-			r->adc_reqlen = 
+			r->adc_reqlen =
 				snprintf(r->adc_req, LEN(r->adv_req),
 					 "GET /cgi-bin/ad.fcgi?team_id=%d&ad_id=2 HTTP/1.1\r\n"
 					 "Host: %s:80\r\n"
@@ -477,7 +477,7 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 
 	case REQST_END:
 		print_dbg("%p: View: %d  Click: %d  Trans: %d   Repeat: %d",
-			  r, r->stat.views, r->stat.clicks, 
+			  r, r->stat.views, r->stat.clicks,
 			  r->stat.transfers, r->stat.repeat);
 		epoll_ctl(epollfd, EPOLL_CTL_DEL, r->peerfd, NULL);
 		close(r->peerfd);
@@ -508,6 +508,3 @@ struct timeval const* request_state_time(struct request const* r, int state)
 {
 	return r->state_times + state;
 }
-
-
-

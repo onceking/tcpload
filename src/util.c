@@ -24,18 +24,18 @@ int nonblock_connect(struct sockaddr_in const* dst)
 	}
 
 	if((sockopt = fcntl(soc, F_GETFL, NULL)) < 0)
-	{ 
+	{
      		print_dbg("Error fcntl(..., F_GETFL): %s", strerror(errno));
 		close(soc);
      		return -1;
 	}
-	sockopt |= O_NONBLOCK; 
+	sockopt |= O_NONBLOCK;
 	if(fcntl(soc, F_SETFL, sockopt) < 0)
-	{ 
+	{
      		print_dbg("Error fcntl(..., F_SETFL): %s", strerror(errno));
 		close(soc);
     		return -1;
-	} 
+	}
 
 	if(0 == connect(soc, (struct sockaddr*)dst, sizeof(*dst)))
 	{
