@@ -187,14 +187,16 @@ void request_process(struct request* r, int epollfd)
 		else
 		{
 			int n = read(r->peerfd, r->resp + r->resp_len,
-				     LEN(r->resp) - r->resp_len);
+				     LEN(r->resp) - r->resp_len - 1);
 			if(n > 0)
 			{
 				char* tmp;
 				char *a, *b, *c;
 				char d;
+
 				// fwrite(r->resp + r->resp_len, n, 1, stdout);
 				r->resp_len += n;
+				r->resp[r->resp_len] = '\0';
 				// search for key words!!
 
 				a = strrchr(r->resp, '\n');
