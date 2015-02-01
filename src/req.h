@@ -4,8 +4,7 @@
 #include <netdb.h>
 
 enum {
-	REQST_SLEEP=0,               // so we can slow it down.
-	REQST_BEGIN,           // init, start connecting
+	REQST_BEGIN,             // init, start connecting
 	REQST_CONNECTING,        // wait
 	REQST_CONNECTED,         // start sending request
 	REQST_HEADER_SENDING,    // wait
@@ -26,7 +25,7 @@ struct stat
 
 void request_process(struct request* r, int epollfd);
 void request_cancel_stale(struct request* r, int epollfd, int timeout);
-void request_wakeup(struct request* r, int epollfd);
+void request_start(struct request* r, int epollfd);
 
 struct request* request_create(char const* path, struct sockaddr_in const* dst);
 void request_destroy(struct request* r);

@@ -29,7 +29,7 @@
 #include "util.h"
 #include "req.h"
 
-char const* REQST_STRS[] = {"SLEEP", "BEGIN", "CONNECTING", "CONNECTED",
+char const* REQST_STRS[] = {"BEGIN", "CONNECTING", "CONNECTED",
 			    "SENDING_HEADER", "SENT_HEADER",
 			    "READING_RESP", "READ_RESP",
 			    "END"};
@@ -87,6 +87,7 @@ int main(int argc, char* argv[])
 	{
 		reqs[reqlen] = request_create(argv[4], &sockaddr);
 		assert(reqs[reqlen]);
+		request_start(reqs[reqlen], epollfd);
 		++reqlen;
 	}
 
@@ -95,26 +96,31 @@ int main(int argc, char* argv[])
 
 	while(1)
 	{
-		for(i=0; i<reqlen; ++i)
-			request_wakeup(reqs[i], epollfd);
+		struct timeval poll_beg;
+		gettimeofday(&poll_beg, NULL);
+		do{
+			int rdylen = epoll_wait(epollfd, events, LEN(reqs), 110);
+			print_dbg("%d events ready", rdylen);
+			for(i=0; i<rdylen; ++i)
+			{
+				struct request* r = (struct request*)(events[i].data.ptr);
+				request_process(r, epollfd);
+				if(request_current_state(r) != REQST_END){
+					++stats.transfers;
+					if(stats.transfers % 1000 == 1){
+						int t = time(NULL) - stats.time_begin;
+						printf("%d transfers/%d seconds, %.2f/s\n",
+						       stats.transfers, t,
+						       (double)stats.transfers/t);
 
-		int rdylen = epoll_wait(epollfd, events, LEN(reqs), 100);
-		print_dbg("%d events ready", rdylen);
-		for(i=0; i<rdylen; ++i)
-		{
-			struct request* r = (struct request*)(events[i].data.ptr);
-			request_process(r, epollfd);
-			if(request_current_state(r) != REQST_END){
-				++stats.transfers;
-				if(stats.transfers % 1000 == 1){
-					int t = time(NULL) - stats.time_begin;
-					printf("%d transfers/%d seconds, %.2f/s\n",
-					       stats.transfers, t,
-					       (double)stats.transfers/t);
-
+					}
 				}
 			}
-		}
+
+
+
+
+		}while(time_elasped(&poll_beg) < 0.1);
 
 		for(i=0; i<reqlen; ++i)
 			request_cancel_stale(reqs[i], epollfd, 1000*1000);

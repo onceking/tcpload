@@ -11,7 +11,6 @@
 #include "util.h"
 
 #define PERIOD (1./(1 << 20))
-#define BOUNDARY "192.168.1.61.1000.11309.1299659472.313.1"
 
 struct request
 {
@@ -60,7 +59,7 @@ struct request* request_create(char const* path, struct sockaddr_in const* dst)
 				 r->path, r->ipstr, ntohs(r->dst.sin_port));
 		assert(r->header_len < LEN(r->header));
 
-		request_set_state(r, REQST_SLEEP);
+		request_set_state(r, REQST_BEGIN);
 	}
 
 	return r;
@@ -128,30 +127,31 @@ void request_connect(struct request* r, struct sockaddr_in const* sa, int epollf
 
 void request_cancel_stale(struct request* r, int epollfd, int timeout)
 {
-	if(request_current_state(r) != REQST_SLEEP &&
-	   time_elasped(request_state_time(r, request_current_state(r))) > timeout)
+	if(time_elasped(request_state_time(r, request_current_state(r))) > timeout)
 	{
 		request_set_state(r, REQST_END);
 		request_process(r, epollfd);
 	}
 }
-void request_wakeup(struct request* r, int epollfd)
+void request_start(struct request* r, int epollfd)
 {
-	if(r->force_event)
-		request_process(r, epollfd);
-
-	if(request_current_state(r) == REQST_SLEEP &&
-	   time_elasped(request_state_time(r, REQST_BEGIN)) >= PERIOD)
-	{
-		request_set_state_event(r, REQST_BEGIN, 1);
-	}
+	assert(request_current_state(r) == REQST_BEGIN);
+	request_process(r, epollfd);
 }
+
 void request_process(struct request* r, int epollfd)
 {
 	int state = request_current_state(r);
 	r->force_event = 0;
 	switch(state)
 	{
+	case REQST_END:
+		++r->stat.repeat;
+		print_dbg("%p: Trans: %d   Repeat: %d",
+			  r, r->stat.transfers, r->stat.repeat);
+		epoll_ctl(epollfd, EPOLL_CTL_DEL, r->peerfd, NULL);
+		close(r->peerfd);
+		// fall through
 	case REQST_BEGIN:
 		request_connect(r, &(r->dst), epollfd, REQST_CONNECTING, REQST_END);
 		break;
@@ -225,14 +225,6 @@ void request_process(struct request* r, int epollfd)
 		close(r->peerfd);
 		request_set_state_event(r, REQST_END, 1);
 		break;
-
-	case REQST_END:
-		print_dbg("%p: Trans: %d   Repeat: %d",
-			  r, r->stat.transfers, r->stat.repeat);
-		epoll_ctl(epollfd, EPOLL_CTL_DEL, r->peerfd, NULL);
-		close(r->peerfd);
-		++r->stat.repeat;
-		request_set_state(r, REQST_SLEEP); // dead end
 	}
 }
 
