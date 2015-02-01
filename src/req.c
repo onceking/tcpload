@@ -12,8 +12,6 @@
 
 #define PERIOD (1./(1 << 20))
 #define BOUNDARY "192.168.1.61.1000.11309.1299659472.313.1"
-extern const char* AD_IP;
-extern struct sockaddr_in AD_SOCKADDR;
 
 struct file
 {
@@ -147,11 +145,6 @@ struct request
 
 	char resp[1024]; // we are only checking status line now
 	int resp_len;
-
-	char adv_req[512];
-	long adv_reqlen;
-	char adc_req[512];
-	long adc_reqlen;
 
 	int state;
 	struct timeval state_times[REQST_END+1]; // track timeout
@@ -363,27 +356,7 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 				// fwrite(r->resp + r->resp_len, n, 1, stdout);
 				r->resp_len += n;
 				// search for key words!!
-				tmp = strstr(r->resp,
-					     "http://ad.game.pdc.poly.edu"
-					     "/cgi-bin/ad.fcgi?team_id=");
-				if(tmp)
-				{
-					char *end = tmp +
-						strlen("http://ad.game.pdc.poly.edu"
-						       "/cgi-bin/ad.fcgi?team_id=");
-					if(isdigit(end[0]))
-					{
-						if(isdigit(end[1]))
-							end[2] = '\0';
-						else
-							end[1] = '\0';;
 
-						r->team_id = atoi(end);
-						print_dbg("%p: found ads for team %d",
-							  r, r->team_id);
-						request_set_state_event(r, REQST_READ, 1);
-					}
-				}
 				a = strrchr(r->resp, '\n');
 				b = strrchr(r->resp, ' ');
 				c = strrchr(r->resp, '>');
@@ -407,78 +380,12 @@ void request_process(struct request* r, int epollfd, struct file const* file)
 
 	case REQST_READ:
 		close(r->peerfd);
-		if(r->team_id >= 0)
-		{
-			r->adv_reqlen =
-				snprintf(r->adv_req, LEN(r->adv_req),
-					 "GET /cgi-bin/ad.fcgi?team_id=%d HTTP/1.1\r\n"
-					 "Host: %s:80\r\n"
-					 "User-Agent: Polyflickr Traffic Generator v1\r\n"
-					 "\r\n",
-					 r->team_id, AD_IP);
-
-			r->adc_reqlen =
-				snprintf(r->adc_req, LEN(r->adv_req),
-					 "GET /cgi-bin/ad.fcgi?team_id=%d&ad_id=2 HTTP/1.1\r\n"
-					 "Host: %s:80\r\n"
-					 "User-Agent: Polyflickr Traffic Generator v1\r\n"
-					 "\r\n",
-					 r->team_id, AD_IP);
-
-			request_connect(r, &AD_SOCKADDR, epollfd,
-					REQST_ADV_CONNECTING, REQST_END);
-		}
-		else
-		{
-			request_set_state_event(r, REQST_END, 1);
-		}
-		break;
-
-	case REQST_ADV_CONNECTING:
-	case REQST_ADV_CONNECTED:
-		r->writepos = 0;
-		// fall through!!!
-	case REQST_ADV_SENDING:
-		request_set_state(r, write_and_next(
-					  r->peerfd,
-					  r->adv_req, &(r->writepos), r->adv_reqlen,
-					  REQST_ADV_SENDING,
-					  REQST_ADV_SENT,
-					  REQST_END));
-		break;
-
-	case REQST_ADV_SENT:
-		++r->stat.views;
-		++r->stat.transfers;
-		close(r->peerfd);
-		request_connect(r, &AD_SOCKADDR, epollfd,
-				REQST_ADC_CONNECTING, REQST_END);
-		break;
-
-
-	case REQST_ADC_CONNECTING:
-	case REQST_ADC_CONNECTED:
-		r->writepos = 0;
-		// fall through!!!
-	case REQST_ADC_SENDING:
-		request_set_state(r, write_and_next(
-					  r->peerfd,
-					  r->adc_req, &(r->writepos), r->adc_reqlen,
-					  REQST_ADC_SENDING,
-					  REQST_ADC_SENT,
-					  REQST_END));
-		break;
-
-	case REQST_ADC_SENT:
-		++r->stat.clicks;
-		++r->stat.transfers;
 		request_set_state_event(r, REQST_END, 1);
 		break;
 
 	case REQST_END:
-		print_dbg("%p: View: %d  Click: %d  Trans: %d   Repeat: %d",
-			  r, r->stat.views, r->stat.clicks,
-			  r->stat.transfers, r->stat.repeat);
+		print_dbg("%p: Trans: %d   Repeat: %d",
+			  r, r->stat.transfers, r->stat.repeat);
 		epoll_ctl(epollfd, EPOLL_CTL_DEL, r->peerfd, NULL);
 		close(r->peerfd);
 		++r->stat.repeat;

@@ -25,16 +25,6 @@ enum {
 	REQST_READING,           //
 	REQST_READ,
 
-	REQST_ADV_CONNECTING,
-	REQST_ADV_CONNECTED,
-	REQST_ADV_SENDING,
-	REQST_ADV_SENT,
-
-	REQST_ADC_CONNECTING,
-	REQST_ADC_CONNECTED,
-	REQST_ADC_SENDING,
-	REQST_ADC_SENT,
-
 	REQST_END                // finished
 };
 extern char const* REQST_STRS[];
@@ -42,8 +32,6 @@ struct request;
 
 struct stat
 {
-	int clicks;
-	int views;
 	int transfers;
 	int repeat;
 };

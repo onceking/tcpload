@@ -33,10 +33,6 @@ char const* REQST_STRS[] = {"SLEEP", "BEGIN", "CONNECTING", "CONNECTED",
 			    "SENDING_HEADER", "SENT_HEADER",
 			    "SENDING_FILE", "SENT_FILE",
 			    "READING_RESP", "READ_RESP",
-			    "ADV_CONNECTING", "ADV_CONNECTED",
-			    "ADV_SENDING", "ADV_SENT",
-			    "ADC_CONNECTING", "ADC_CONNECTED",
-			    "ADC_SENDING", "ADC_SENT",
 			    "END"};
 const char* AD_IP = "128.238.63.11";
 struct sockaddr_in AD_SOCKADDR;
