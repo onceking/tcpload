@@ -1,5 +1,7 @@
-bin_PROGRAMS = tragen
+bin_PROGRAMS = tragen tragen_debug
 
 tragen_SOURCES = main.c util.c util.h req.c req.h
-#test1_simple_CFLAGS = @LIB_MYSQLPP_CFLAGS@
-#test1.simple_LDADD = @LIB_MYSQL_LIBS@ @LIB_MYSQLPP_LIBS@
+tragen_debug_SOURCES = main.c util.c util.h req.c req.h
+
+tragen_CFLAGS = -O2 -UDEBUG -g -ggdb
+tragen_debug_CFLAGS = -O0 -DDEBUG -g -ggdb
