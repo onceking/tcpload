@@ -36,7 +36,7 @@ char const* REQST_STRS[] = {"SLEEP", "BEGIN", "CONNECTING", "CONNECTED",
 
 int main(int argc, char* argv[])
 {
-	struct request* reqs[100];
+	struct request* reqs[1024];
 	int reqlen = 0;
 
 	int threads;
@@ -44,6 +44,11 @@ int main(int argc, char* argv[])
 
 	int epollfd;
 	struct epoll_event events[LEN(reqs)];
+
+	struct {
+		time_t time_begin;
+		unsigned transfers;
+	} stats;
 
 	int i;
 
@@ -69,15 +74,14 @@ int main(int argc, char* argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	printf("Will use %d threads to generate traffic to "
-	       "http://%s:%s%s",
-	       argv[1], argv[2], argv[3], argv[4]);
-
 	threads = atoi(argv[1]);
-	assert(threads > 0 && threads < 100);
+	assert(threads > 0 && threads < LEN(reqs));
 	inet_pton(AF_INET, argv[2], &(sockaddr.sin_addr));
 	sockaddr.sin_family = AF_INET;
 	sockaddr.sin_port = htons(atoi(argv[3]));
+
+	printf("Will use %d threads to generate traffic to http://%s:%s%s\n",
+	       threads, argv[2], argv[3], argv[4]);
 
 	for(i=0; i<threads; ++i)
 	{
@@ -86,9 +90,8 @@ int main(int argc, char* argv[])
 		++reqlen;
 	}
 
-
-	srand(time(NULL));
-
+	time(&stats.time_begin);
+	stats.transfers = 0;
 
 	while(1)
 	{
@@ -96,10 +99,21 @@ int main(int argc, char* argv[])
 			request_wakeup(reqs[i], epollfd);
 
 		int rdylen = epoll_wait(epollfd, events, LEN(reqs), 100);
+		print_dbg("%d events ready", rdylen);
 		for(i=0; i<rdylen; ++i)
 		{
 			struct request* r = (struct request*)(events[i].data.ptr);
 			request_process(r, epollfd);
+			if(request_current_state(r) != REQST_END){
+				++stats.transfers;
+				if(stats.transfers % 1000 == 1){
+					int t = time(NULL) - stats.time_begin;
+					printf("%d transfers/%d seconds, %.2f/s\n",
+					       stats.transfers, t,
+					       (double)stats.transfers/t);
+
+				}
+			}
 		}
 
 		for(i=0; i<reqlen; ++i)

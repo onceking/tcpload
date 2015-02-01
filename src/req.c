@@ -82,15 +82,16 @@ static int write_and_next(int fd, char const* buf, long* offset, long len,
 		return *offset == len ?s_done :s_partial;
 	}
 
-	print_dbg("write: %s", strerror(errno));
+	print_dbg("write[%d]: %s", errno, strerror(errno));
+
 	return s_fail;
 }
 
 static void request_set_state_event(struct request* r, int s, int force_event)
 {
-	print_dbg("%p: advanced from [%d]%s to [%d]%s.", r,
+	print_dbg("%p: advanced from [%d]%s to [%d]%s. Force: %d", r,
 		  r->state, REQST_STRS[r->state],
-		  s, REQST_STRS[s]);
+		  s, REQST_STRS[s], force_event);
 	r->state = s;
 	r->force_event = force_event;
 	gettimeofday(r->state_times + r->state, NULL);

@@ -5,8 +5,12 @@
 #include <stdio.h>
 #include <netdb.h>
 
-#define print_dbg(fmt, ...) printf(__FILE__ ":%05d: " fmt "\n",	\
-				   __LINE__, ##__VA_ARGS__)
+#ifdef DEBUG
+#define print_dbg(fmt, ...) fprintf(stderr, __FILE__ ":%05d: " fmt "\n", \
+				    __LINE__, ##__VA_ARGS__)
+#else
+#define print_dbg(fmt, ...) ;
+#endif
 
 #define LEN(a) (sizeof(a)/sizeof(a[0]))
 

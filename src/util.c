@@ -38,14 +38,10 @@ int nonblock_connect(struct sockaddr_in const* dst)
 	}
 
 	if(0 == connect(soc, (struct sockaddr*)dst, sizeof(*dst)))
-	{
-	}
-	else if(errno == EINPROGRESS)
-	{
-	}
-	else
-	{
-     		print_dbg("connect: %s", strerror(errno));
+		return soc;
+
+	if(errno != EINPROGRESS){
+		print_dbg("connect[%d]: %s", errno, strerror(errno));
 		close(soc);
 		return -1;
 	}
