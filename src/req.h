@@ -17,12 +17,6 @@ enum {
 extern char const* REQST_STRS[];
 struct request;
 
-struct stat
-{
-	int transfers;
-	int repeat;
-};
-
 void request_process(struct request* r, int epollfd);
 void request_cancel_stale(struct request* r, int epollfd, int timeout);
 void request_start(struct request* r, int epollfd);
