@@ -1,14 +1,3 @@
-/**
- * @file   main.c
- * @author Sai <swang02@students.poly.edu>
- * @date   Tue Mar  8 19:38:13 2011
- *
- * @brief  Traffic generator for poly-flickr..
- *         Use nonblock I/O to increase perf.
- *
- *
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
