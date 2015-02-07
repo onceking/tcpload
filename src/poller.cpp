@@ -63,12 +63,12 @@ void poller_run(struct poller* p, unsigned duration, unsigned trans){
 		}
 
 		printf("Time: %0.2fs  Req: %lu %.2f/s"
-		       " TX: %luKB/%luk %.0fkB/%.0fk/s %lu/t"
+		       " TX: %luKB/%lu %.0fkB/%.0f/s %lu/t"
 		       " RX: %luMB/%luk %.0fMB/%.0fk/s %lu/r\n",
 		       dur, p->stat.count, p->stat.count/dur,
 
-		       p->stat.tx >> 10, p->stat.txn >> 10,
-		       (p->stat.tx >> 10)/dur, (p->stat.txn >> 10)/dur,
+		       p->stat.tx >> 10, p->stat.txn,
+		       (p->stat.tx >> 10)/dur, p->stat.txn/dur,
 		       p->stat.tx/p->stat.txn,
 
 		       p->stat.rx >> 20, p->stat.rxn >> 10,
