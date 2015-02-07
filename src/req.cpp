@@ -184,7 +184,7 @@ void request_process(struct request* r, struct epoll_event const* ev, int epollf
 #else
 		struct epoll_event ev;
 		ev.data.ptr = (void*)r;
-		ev.events = EPOLLIN;
+		ev.events = EPOLLIN | EPOLLET;
 		if(0 == epoll_ctl(epollfd, EPOLL_CTL_MOD, r->peerfd, &ev)){
 			request_set_state(r, REQST_READING);
 		}
@@ -202,31 +202,44 @@ void request_process(struct request* r, struct epoll_event const* ev, int epollf
 			request_goto_state(r, REQST_END, epollfd);
 		}
 		else{
-			int n = read(r->peerfd, r->resp + r->resp_len,
-				     LEN(r->resp) - r->resp_len - 1);
-			if(n > 0){
-				char tmp;
-				// fwrite(r->resp + r->resp_len, n, 1, stdout);
-				r->resp_len += n;
-				++r->stat.rxn;
-				r->stat.rx += n;
-				r->resp[r->resp_len] = '\0';
-				// search for key words!!
+			int n;
+			do{
+				n = read(r->peerfd, r->resp + r->resp_len,
+					 LEN(r->resp) - r->resp_len - 1);
+				if(n > 0){
+					char *a;
+					// fwrite(r->resp + r->resp_len, n, 1, stdout);
+					r->resp_len += n;
+					++r->stat.rxn;
+					r->stat.rx += n;
+					r->resp[r->resp_len] = '\0';
+					// search for key words!!
 
-				// tmp = r->resp[20];
-				// r->resp[20] = '\0';
-				print_dbg("Reply[%d]: %s\n",
-					  r->resp_len, r->resp);
-				// r->resp[20] = tmp;
+					// tmp = r->resp[20];
+					// r->resp[20] = '\0';
+					print_dbg("Reply[%d])", r->resp_len);
+					// r->resp[20] = tmp;
+					r->resp_len = 0;
+					a = strrchr(r->resp, '/');
+					if(a){
+						print_dbg("Reply[%d]: %s",
+							  r->resp_len, a);
+						if(0 == memcmp(a-1, "</html>",
+							       strlen("</html>"))){
+							request_goto_state(
+								r, REQST_END, epollfd);
+							break;
+						}
+					}
 
-				r->resp_len = 0;
-			}
-			else{
-				if(errno != EINPROGRESS){
-					perror("read: %s", strerror(errno));
 				}
-				request_goto_state(r, REQST_END, epollfd);
-			}
+				else if(errno != EAGAIN && errno != EWOULDBLOCK){
+					if(errno != EINPROGRESS){
+						perror("read: %s", strerror(errno));
+					}
+					request_goto_state(r, REQST_END, epollfd);
+				}
+			}while(n > 0);
 		}
 		break;
 	}
