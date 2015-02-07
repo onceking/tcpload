@@ -24,7 +24,7 @@ void request_start(struct request* r, int epollfd);
 struct request* request_create(char const* path, struct sockaddr_in const* dst);
 void request_destroy(struct request* r);
 
-struct stat const* request_stat(struct request const* r);
+struct stats const* request_stat(struct request const* r);
 int request_current_state(struct request const* r);
 struct timeval const* request_state_time(struct request const* r, int state);
 

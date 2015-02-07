@@ -5,8 +5,8 @@
 
 struct stats{
 	time_t beg;
-	unsigned tx;
-	unsigned rx;
+	unsigned long tx;
+	unsigned long rx;
 	unsigned count;
 };
 

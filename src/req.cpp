@@ -9,6 +9,7 @@
 
 #include "req.h"
 #include "util.h"
+#include "stats.h"
 
 #define PERIOD (1./(1 << 20))
 
@@ -33,7 +34,7 @@ struct request
 
 	int state;
 	struct timeval state_times[REQST_END+1]; // track timeout
-	struct stat stat;
+	struct stats stat;
 };
 
 static void request_set_state(struct request* r, int s);
@@ -146,9 +147,8 @@ void request_process(struct request* r, int epollfd)
 	switch(state)
 	{
 	case REQST_END:
-		++r->stat.repeat;
-		print_dbg("%p: Trans: %d   Repeat: %d",
-			  r, r->stat.transfers, r->stat.repeat);
+		++r->stat.count;
+		print_dbg("%p: Trans: %d", r, r->stat.count);
 		epoll_ctl(epollfd, EPOLL_CTL_DEL, r->peerfd, NULL);
 		close(r->peerfd);
 		// fall through
@@ -238,7 +238,7 @@ struct sockaddr_in const* request_dst(struct request const* r)
 }
 
 
-struct stat const* request_stat(struct request const* r)
+struct stats const* request_stat(struct request const* r)
 {
 	return &(r->stat);
 }

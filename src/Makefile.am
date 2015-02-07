@@ -1,8 +1,8 @@
 bin_PROGRAMS = tragen tragen_debug
 
-tragen_SOURCES = main.c util.c util.h req.c req.h
-tragen_debug_SOURCES = main.c util.c util.h req.c req.h
+tragen_SOURCES =       main.cpp util.cpp util.h req.cpp req.h poller.cpp
+tragen_debug_SOURCES = main.cpp util.cpp util.h req.cpp req.h poller.cpp
 
-CFLAGS = -fcolor-diagnostics -Qunused-arguments -g -ggdb
-tragen_CFLAGS = -O2
-tragen_debug_CFLAGS = -O0 -DDEBUG
+CXXFLAGS = -fcolor-diagnostics -Qunused-arguments -g -ggdb
+tragen_CXXFLAGS = -O2
+tragen_debug_CXXFLAGS = -O0 -DDEBUG

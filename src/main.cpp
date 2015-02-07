@@ -16,6 +16,7 @@
 #include <assert.h>
 
 #include "util.h"
+#include "poller.h"
 #include "req.h"
 
 char const* REQST_STRS[] = {"BEGIN", "CONNECTING", "CONNECTED",
@@ -25,20 +26,8 @@ char const* REQST_STRS[] = {"BEGIN", "CONNECTING", "CONNECTED",
 
 int main(int argc, char* argv[])
 {
-	struct request* reqs[1024];
-	int reqlen = 0;
-
-	int threads;
+	struct poller p;
 	struct sockaddr_in sockaddr;
-
-	int epollfd;
-	struct epoll_event events[LEN(reqs)];
-
-	struct {
-		time_t time_begin;
-		unsigned transfers;
-	} stats;
-
 	int i;
 
 	if (argc <= 4) {
@@ -56,64 +45,24 @@ int main(int argc, char* argv[])
 
 	signal(SIGPIPE, SIG_IGN); // ignore broken pipe.
 
-	epollfd = epoll_create(LEN(reqs)+10);
-	if (epollfd == -1)
-	{
-		print_dbg("epoll_create: %s", strerror(errno));
-		exit(EXIT_FAILURE);
-	}
+	p.threads = atoi(argv[1]);
+	assert(p.threads > 0);
 
-	threads = atoi(argv[1]);
-	assert(threads > 0 && threads < LEN(reqs));
 	inet_pton(AF_INET, argv[2], &(sockaddr.sin_addr));
 	sockaddr.sin_family = AF_INET;
 	sockaddr.sin_port = htons(atoi(argv[3]));
 
 	printf("Will use %d threads to generate traffic to http://%s:%s%s\n",
-	       threads, argv[2], argv[3], argv[4]);
+	       p.threads, argv[2], argv[3], argv[4]);
 
-	for(i=0; i<threads; ++i)
+	for(i=0; i<p.threads; ++i)
 	{
-		reqs[reqlen] = request_create(argv[4], &sockaddr);
-		assert(reqs[reqlen]);
-		request_start(reqs[reqlen], epollfd);
-		++reqlen;
+		struct request* r = request_create(argv[4], &sockaddr);
+		assert(r);
+		p.reqs.push_back(r);
 	}
 
-	time(&stats.time_begin);
-	stats.transfers = 0;
-
-	while(1)
-	{
-		struct timeval poll_beg;
-		gettimeofday(&poll_beg, NULL);
-		do{
-			int rdylen = epoll_wait(epollfd, events, LEN(reqs), 110);
-			print_dbg("%d events ready", rdylen);
-			for(i=0; i<rdylen; ++i)
-			{
-				struct request* r = (struct request*)(events[i].data.ptr);
-				request_process(r, epollfd);
-				if(request_current_state(r) != REQST_END){
-					++stats.transfers;
-					if(stats.transfers % 1000 == 1){
-						int t = time(NULL) - stats.time_begin;
-						printf("%d transfers/%d seconds, %.2f/s\n",
-						       stats.transfers, t,
-						       (double)stats.transfers/t);
-
-					}
-				}
-			}
-
-
-
-
-		}while(time_elasped(&poll_beg) < 0.1);
-
-		for(i=0; i<reqlen; ++i)
-			request_cancel_stale(reqs[i], epollfd, 1000*1000);
-	}
+	poller_run(&p, 10, 0);
 
 	return 0;
 }
