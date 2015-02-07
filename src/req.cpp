@@ -15,8 +15,6 @@
 
 struct request
 {
-	int force_event;
-
 	struct sockaddr_in dst;
 	char ipstr[INET6_ADDRSTRLEN];
 	int peerfd;
@@ -29,7 +27,7 @@ struct request
 	char header[4096];
 	long header_len;
 
-	char resp[1024]; // we are only checking status line now
+	char resp[1<<20]; // we are only checking status line now
 	int resp_len;
 
 	int state;
@@ -43,7 +41,6 @@ struct request* request_create(char const* path, struct sockaddr_in const* dst)
 	struct request* r = (struct request*)calloc(1, sizeof(struct request));
 	if(NULL != r)
 	{
-		r->force_event = 0;
 		memcpy(&(r->dst), dst, sizeof(r->dst));
 		inet_ntop(AF_INET, &(dst->sin_addr), r->ipstr, LEN(r->ipstr));
 
@@ -53,11 +50,11 @@ struct request* request_create(char const* path, struct sockaddr_in const* dst)
 		r->header_len =
 			snprintf(r->header, LEN(r->header),
 				 "GET %s HTTP/1.1\r\n"
-				 "Host: %s:%d\r\n"
+				 "Host: www.bloomberg.com\r\n"
 				 "Connection: close\r\n"
 				 "User-Agent: http-bomb 1.0\r\n"
 				 "\r\n",
-				 r->path, r->ipstr, ntohs(r->dst.sin_port));
+				 r->path);
 		assert(r->header_len < LEN(r->header));
 
 		request_set_state(r, REQST_BEGIN);
@@ -72,11 +69,14 @@ void request_destroy(struct request* r)
 }
 
 static int write_and_next(int fd, char const* buf, long* offset, long len,
+			  struct stats* stat,
 			  int s_partial, int s_done, int s_fail)
 {
 	int n = write(fd, buf+(*offset), len-(*offset));
 	if(n > 0)
 	{
+		stat->tx += n;
+		++stat->txn;
 		*offset += n;
 		assert(*offset <= len);
 		return *offset == len ?s_done :s_partial;
@@ -87,18 +87,18 @@ static int write_and_next(int fd, char const* buf, long* offset, long len,
 	return s_fail;
 }
 
-static void request_set_state_event(struct request* r, int s, int force_event)
-{
-	print_dbg("%p: advanced from [%d]%s to [%d]%s. Force: %d", r,
+static void request_set_state(struct request* r, int s){
+	print_dbg("%p: advanced from [%d]%s to [%d]%s. ",
+		  r,
 		  r->state, REQST_STRS[r->state],
-		  s, REQST_STRS[s], force_event);
+		  s, REQST_STRS[s]);
 	r->state = s;
-	r->force_event = force_event;
 	gettimeofday(r->state_times + r->state, NULL);
 }
-static void request_set_state(struct request* r, int s)
+static void request_goto_state(struct request* r, int s, int epollfd)
 {
-	request_set_state_event(r, s, 0);
+	request_set_state(r, s);
+	request_process(r, NULL, epollfd);
 }
 
 void request_connect(struct request* r, struct sockaddr_in const* sa, int epollfd,
@@ -108,7 +108,7 @@ void request_connect(struct request* r, struct sockaddr_in const* sa, int epollf
 	if(r->peerfd > 0)
 	{
 		struct epoll_event ev;
-		ev.events = EPOLLOUT; // EPOLLIN |
+		ev.events = EPOLLOUT | EPOLLHUP;
 		ev.data.ptr = (void*)r;
 		if(0 == epoll_ctl(epollfd, EPOLL_CTL_ADD, r->peerfd, &ev))
 		{
@@ -128,27 +128,26 @@ void request_connect(struct request* r, struct sockaddr_in const* sa, int epollf
 
 void request_cancel_stale(struct request* r, int epollfd, int timeout)
 {
-	if(time_elasped(request_state_time(r, request_current_state(r))) > timeout)
-	{
+}
+void request_housekeep(struct request* r, int epollfd)
+{
+	if(request_current_state(r) == REQST_BEGIN ||
+	   request_current_state(r) == REQST_END){
+		request_process(r, NULL, epollfd);
+	}
+	else if(time_elasped(request_state_time(r, request_current_state(r))) > 10){
 		request_set_state(r, REQST_END);
-		request_process(r, epollfd);
+		request_process(r, NULL, epollfd);
 	}
 }
-void request_start(struct request* r, int epollfd)
-{
-	assert(request_current_state(r) == REQST_BEGIN);
-	request_process(r, epollfd);
-}
 
-void request_process(struct request* r, int epollfd)
+void request_process(struct request* r, struct epoll_event const* ev, int epollfd)
 {
 	int state = request_current_state(r);
-	r->force_event = 0;
 	switch(state)
 	{
 	case REQST_END:
 		++r->stat.count;
-		print_dbg("%p: Trans: %d", r, r->stat.count);
 		epoll_ctl(epollfd, EPOLL_CTL_DEL, r->peerfd, NULL);
 		close(r->peerfd);
 		// fall through
@@ -160,70 +159,75 @@ void request_process(struct request* r, int epollfd)
 	case REQST_CONNECTED:
 		r->writepos = 0;
 		// fall through!!!
-	case REQST_HEADER_SENDING:
-		request_set_state(r, write_and_next(
-					  r->peerfd,
-					  r->header, &(r->writepos), r->header_len,
-					  REQST_HEADER_SENDING,
-					  REQST_HEADER_SENT,
-					  REQST_END));
+	case REQST_HEADER_SENDING:{
+		int s = write_and_next(
+			r->peerfd,
+			r->header, &(r->writepos), r->header_len,
+			&r->stat,
+			REQST_HEADER_SENDING,
+			REQST_HEADER_SENT,
+			REQST_END);
+		if(s == REQST_END){
+			request_goto_state(r, REQST_END, epollfd);
+		}
+		else{
+			request_set_state(r, s);
+		}
+	}
 		break;
 
 
-	case REQST_HEADER_SENT:
+	case REQST_HEADER_SENT:{
 #ifdef IGNORE_RESPONSE
 		// if we don't care about resp
-		request_set_state_event(r, REQST_END, 1);
+		request_goto_state(r, REQST_END, epollfd);
 #else
-		request_set_state(r, REQST_READING);
+		struct epoll_event ev;
+		ev.data.ptr = (void*)r;
+		ev.events = EPOLLIN;
+		if(0 == epoll_ctl(epollfd, EPOLL_CTL_MOD, r->peerfd, &ev)){
+			request_set_state(r, REQST_READING);
+		}
+		else{
+			print_dbg("epoll_ctl(mod): %s", strerror(errno));
+			request_set_state(r, REQST_END);
+		}
 #endif
+	}
 		break;
 	case REQST_READING:
-		if(r->resp_len >= LEN(r->resp))
-		{
+		if(r->resp_len >= LEN(r->resp)){
 			print_dbg("Response [%d>=%lu] too long.",
 				  r->resp_len, LEN(r->resp));
-			request_set_state_event(r, REQST_END, 1);
+			request_goto_state(r, REQST_END, epollfd);
 		}
-		else
-		{
+		else{
 			int n = read(r->peerfd, r->resp + r->resp_len,
 				     LEN(r->resp) - r->resp_len - 1);
-			if(n > 0)
-			{
-				char* tmp;
-				char *a, *b, *c;
-				char d;
-
+			if(n > 0){
+				char tmp;
 				// fwrite(r->resp + r->resp_len, n, 1, stdout);
 				r->resp_len += n;
+				++r->stat.rxn;
+				r->stat.rx += n;
 				r->resp[r->resp_len] = '\0';
 				// search for key words!!
 
-				a = strrchr(r->resp, '\n');
-				b = strrchr(r->resp, ' ');
-				c = strrchr(r->resp, '>');
-				if(b > a)
-					a = b;
-				if(c > a)
-					a = c;
-				d = *(a+1);
-				*(a+1) = '\0';
-				print_dbg("Reply: %s", r->resp);
-				*(a+1) = d;
-				memmove(r->resp, a+1, r->resp_len - (a - r->resp + 1));
-				r->resp_len -= (a - r->resp + 1);
+				// tmp = r->resp[20];
+				// r->resp[20] = '\0';
+				print_dbg("Reply[%d]: %s\n",
+					  r->resp_len, r->resp);
+				// r->resp[20] = tmp;
+
+				r->resp_len = 0;
 			}
-			else
-			{
-				request_set_state_event(r, REQST_END, 1);
+			else{
+				if(errno != EINPROGRESS){
+					perror("read: %s", strerror(errno));
+				}
+				request_goto_state(r, REQST_END, epollfd);
 			}
 		}
-		break;
-
-	case REQST_READ:
-		close(r->peerfd);
-		request_set_state_event(r, REQST_END, 1);
 		break;
 	}
 }

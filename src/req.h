@@ -17,9 +17,10 @@ enum {
 extern char const* REQST_STRS[];
 struct request;
 
-void request_process(struct request* r, int epollfd);
+void request_process(struct request* r, struct epoll_event const*, int epollfd);
+
 void request_cancel_stale(struct request* r, int epollfd, int timeout);
-void request_start(struct request* r, int epollfd);
+void request_housekeep(struct request* r, int epollfd);
 
 struct request* request_create(char const* path, struct sockaddr_in const* dst);
 void request_destroy(struct request* r);
