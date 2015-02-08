@@ -14,7 +14,7 @@ void poller_run(struct poller* p, unsigned duration, unsigned trans){
 	double dur = 0.;
 	p->epollfd = epoll_create1(EPOLL_CLOEXEC);
 	if(p->epollfd == -1){
-		perror("epoll_create: %s", strerror(errno));
+		perror("epoll_create");
 		return;
 	}
 

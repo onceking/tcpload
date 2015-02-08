@@ -210,7 +210,7 @@ void request_process(struct request* r, struct epoll_event const* ev, int epollf
 				}
 				else if(errno != EAGAIN && errno != EWOULDBLOCK){
 					if(errno != EINPROGRESS){
-						perror("read: %s", strerror(errno));
+						perror("read");
 					}
 					request_goto_state(r, REQST_END, epollfd);
 				}

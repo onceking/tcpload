@@ -9,13 +9,16 @@
 #include <errno.h>
 #include "stats.h"
 
-#define perror(fmt, ...) fprintf(stderr, __FILE__ ":%05d: " fmt "\n",	\
-				 __LINE__, ##__VA_ARGS__)
+#define perror(name)							\
+	fprintf(stderr, __FILE__ ":%05d: " name "[%d]: %s\n",		\
+		__LINE__, errno, strerror(errno))
 
 #ifdef DEBUG
-#define print_dbg perror
+#define print_dbg(fmt, ...)					\
+	fprintf(stderr, __FILE__ ":%05d: " fmt "\n",		\
+		__LINE__, ##__VA_ARGS__)
 #else
-#define print_dbg(fmt, ...) ;
+#define print_dbg(fmt, ...)
 #endif
 
 #define LEN(a) (sizeof(a)/sizeof(a[0]))
