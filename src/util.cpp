@@ -17,11 +17,25 @@ int nonblock_connect(struct sockaddr_in const* dst)
 	// @todo comment out
 	print_dbg("Connecting to %s:%d", ip, ntohs(dst->sin_port));
 
-	soc = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+	soc = socket( AF_INET, SOCK_STREAM, 0);
 	if(soc < 0)
 	{
      		print_dbg("socket: %s", strerror(errno));
 		return -1;
+	}
+
+	if((sockopt = fcntl(soc, F_GETFL, NULL)) < 0)
+	{
+     		print_dbg("Error fcntl(..., F_GETFL): %s", strerror(errno));
+		close(soc);
+     		return -1;
+	}
+	sockopt |= O_NONBLOCK;
+	if(fcntl(soc, F_SETFL, sockopt) < 0)
+	{
+     		print_dbg("Error fcntl(..., F_SETFL): %s", strerror(errno));
+		close(soc);
+    		return -1;
 	}
 
 	if(0 == connect(soc, (struct sockaddr*)dst, sizeof(*dst)))
