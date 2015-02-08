@@ -8,10 +8,8 @@ enum {
 	REQST_CONNECTING,        // wait
 	REQST_CONNECTED,         // start sending request
 	REQST_HEADER_SENDING,    // wait
-	REQST_HEADER_SENT,       // start reading resp
-	REQST_READING,           //
-	REQST_READ,
-
+	REQST_HEADER_READING,
+	REQST_BODY_READING,
 	REQST_END                // finished
 };
 extern char const* REQST_STRS[];

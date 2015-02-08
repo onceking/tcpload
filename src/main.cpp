@@ -19,10 +19,15 @@
 #include "poller.h"
 #include "req.h"
 
-char const* REQST_STRS[] = {"BEGIN", "CONNECTING", "CONNECTED",
-			    "SENDING_HEADER", "SENT_HEADER",
-			    "READING_RESP", "READ_RESP",
-			    "END"};
+char const* REQST_STRS[] = {
+	"BEGIN",
+	"CONNECTING",
+	"CONNECTED",
+	"SENDING_HEADER",
+	"READING_HEADER",
+	"READING_BODY",
+	"END"
+};
 
 int main(int argc, char* argv[])
 {

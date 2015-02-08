@@ -4,11 +4,11 @@
 #include <string.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <assert.h>
 
 #include "util.h"
 
-int nonblock_connect(struct sockaddr_in const* dst)
-{
+int nonblock_connect(struct sockaddr_in const* dst){
 	int soc = -1;
 	long sockopt;
 	char ip[INET6_ADDRSTRLEN];
@@ -50,9 +50,21 @@ int nonblock_connect(struct sockaddr_in const* dst)
 	return soc;
 }
 
+int nonblock_write(int fd, char const* buf, long* offset, long len, struct stats* stat){
+	int n = write(fd, buf+(*offset), len-(*offset));
+	if(n > 0){
+		stat->tx += n;
+		++stat->txn;
+		*offset += n;
+		assert(*offset <= len);
+		return *offset == len ? WRITE_DONE :WRITE_PARTIAL;
+	}
 
-double time_elasped(struct timeval const* beg)
-{
+	print_dbg("write[%d]: %s", errno, strerror(errno));
+	return WRITE_FAIL;
+}
+
+double time_elasped(struct timeval const* beg){
 	struct timeval end;
 	gettimeofday(&end, NULL);
 	return (end.tv_sec - beg->tv_sec) +

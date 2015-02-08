@@ -68,25 +68,6 @@ void request_destroy(struct request* r)
 	free(r);
 }
 
-static int write_and_next(int fd, char const* buf, long* offset, long len,
-			  struct stats* stat,
-			  int s_partial, int s_done, int s_fail)
-{
-	int n = write(fd, buf+(*offset), len-(*offset));
-	if(n > 0)
-	{
-		stat->tx += n;
-		++stat->txn;
-		*offset += n;
-		assert(*offset <= len);
-		return *offset == len ?s_done :s_partial;
-	}
-
-	print_dbg("write[%d]: %s", errno, strerror(errno));
-
-	return s_fail;
-}
-
 static void request_set_state(struct request* r, int s){
 	print_dbg("%p: advanced from [%d]%s to [%d]%s. ",
 		  r,
@@ -155,47 +136,41 @@ void request_process(struct request* r, struct epoll_event const* ev, int epollf
 		request_connect(r, &(r->dst), epollfd, REQST_CONNECTING, REQST_END);
 		break;
 
-	case REQST_CONNECTING:
+	case REQST_CONNECTING: // TODO: noop?
 	case REQST_CONNECTED:
 		r->writepos = 0;
 		// fall through!!!
-	case REQST_HEADER_SENDING:{
-		int s = write_and_next(
-			r->peerfd,
-			r->header, &(r->writepos), r->header_len,
-			&r->stat,
-			REQST_HEADER_SENDING,
-			REQST_HEADER_SENT,
-			REQST_END);
-		if(s == REQST_END){
-			request_goto_state(r, REQST_END, epollfd);
-		}
-		else{
-			request_set_state(r, s);
-		}
-	}
-		break;
-
-
-	case REQST_HEADER_SENT:{
+	case REQST_HEADER_SENDING:
+		switch(nonblock_write(r->peerfd, r->header,
+				      &(r->writepos), r->header_len,
+				      &r->stat)){
+		case WRITE_DONE:{
 #ifdef IGNORE_RESPONSE
-		// if we don't care about resp
-		request_goto_state(r, REQST_END, epollfd);
+			// if we don't care about resp
+			request_goto_state(r, REQST_END, epollfd);
 #else
-		struct epoll_event ev;
-		ev.data.ptr = (void*)r;
-		ev.events = EPOLLIN | EPOLLET;
-		if(0 == epoll_ctl(epollfd, EPOLL_CTL_MOD, r->peerfd, &ev)){
-			request_set_state(r, REQST_READING);
-		}
-		else{
-			print_dbg("epoll_ctl(mod): %s", strerror(errno));
-			request_set_state(r, REQST_END);
-		}
+			struct epoll_event ev;
+			ev.data.ptr = (void*)r;
+			ev.events = EPOLLIN | EPOLLET;
+			if(0 == epoll_ctl(epollfd, EPOLL_CTL_MOD, r->peerfd, &ev)){
+				request_set_state(r, REQST_HEADER_READING);
+			}
+			else{
+				print_dbg("epoll_ctl(mod): %s", strerror(errno));
+				request_set_state(r, REQST_END);
+			}
 #endif
-	}
+		}
+			break;
+		case WRITE_PARTIAL:
+			break;
+		case WRITE_FAIL:
+			request_goto_state(r, REQST_END, epollfd);
+			break;
+		}
 		break;
-	case REQST_READING:
+
+	case REQST_HEADER_READING:
 		if(r->resp_len >= LEN(r->resp)){
 			print_dbg("Response [%d>=%lu] too long.",
 				  r->resp_len, LEN(r->resp));
