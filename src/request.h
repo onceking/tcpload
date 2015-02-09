@@ -1,8 +1,8 @@
 #ifndef REQUEST_H
 #define REQUEST_H
 
-#include <time.h>
 #include <netdb.h>
+#include "stats.h"
 
 struct request{
 	struct sockaddr_in ns;

@@ -50,31 +50,6 @@ int nonblock_connect(struct sockaddr_in const* dst){
 	return soc;
 }
 
-int nonblock_write(int fd, char const* buf, long len, struct stats* stat){
-	int n = write(fd, buf, len);
-	++stat->txn;
-	if(n > 0){
-		stat->tx += n;
-	}
-	else{
-		print_dbg("write[%d]: %s", errno, strerror(errno));
-	}
-	return n;
-}
-
-int nonblock_read(int fd, char *buf, long len, struct stats* stat){
-	int n = read(fd, buf, len);
-	++stat->rxn;
-	if(n > 0){
-		stat->rx += n;
-		print_dbg("Reply[%d])", r->resp_len);
-	}
-	else{
-		print_dbg("read[%d]: %s", errno, strerror(errno));
-	}
-	return n;
-}
-
 int time_elasped(struct timeval const* beg){
 	struct timeval end;
 	gettimeofday(&end, NULL);

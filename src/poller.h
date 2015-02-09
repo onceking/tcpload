@@ -2,17 +2,15 @@
 #define POLLER_H
 
 #include <vector>
-#include "req.h"
+#include "request.h"
+#include "thread.h"
 #include "stats.h"
 
 struct poller {
-	std::vector<struct request*> reqs;
-
-	// async threads
-	unsigned threads;
-
 	int epollfd;
 	std::vector<struct epoll_event> events;
+
+	std::vector<struct thread> threads;
 
 	struct stats stat;
 };

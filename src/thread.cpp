@@ -13,7 +13,12 @@
 static void thread_set_state(struct thread*, int);
 static void thread_goto_state(struct thread*, int);
 
-static void (*state_fn)(struct thread*, struct epoll_event const*);
+static void sf_begin(struct thread*);
+static void sf_connecting(struct thread*);
+static void sf_header_sending(struct thread*);
+static void sf_header_reading(struct thread*);
+static void sf_done(struct thread*);
+static void sf_error(struct thread*);
 
 char const* thread_state_string(int st){
 	static char const* strs[] = {
@@ -29,13 +34,17 @@ char const* thread_state_string(int st){
 		"ERROR"
 	};
 
-	asset(st < THREAD_ST_COUNT);
+	assert(st < THREAD_ST_COUNT);
 
 	return strs[st];
 }
 
 void thread_set_request(struct thread* t, struct request* r){
 	assert(t->state == THREAD_ST_BEGIN);
+	if(t->req){
+		stats_add(&t->req->stat, &t->stat);
+		stats_clear(&t->stat);
+	}
 	t->req = r;
 }
 
@@ -44,12 +53,25 @@ void thread_start(struct thread* t){
 	thread_process(t, NULL);
 }
 
-void thread_process(struct thread*, struct epoll_event const*){
+void thread_process(struct thread* t, struct epoll_event const* ev){
+	static void (*fns[])(struct thread*) = {
+		sf_begin,
+		NULL,
+		NULL,
+		sf_connecting,
+		sf_header_sending,
+		sf_header_reading,
+		NULL,
+		sf_done,
+		sf_error
+	};
+	assert(fns[t->state]);
+	fns[t->state](t);
 }
 
-void request_housekeep(struct thread* t){
-	if(time_elasped(t->state_time) > t->req->timeout_ms){
-		thread_goto_state(r, THREAD_ST_ERROR);
+void thread_housekeep(struct thread* t){
+	if(time_elasped(&t->state_time) > t->req->timeout_ms){
+		thread_goto_state(t, THREAD_ST_ERROR);
 	}
 }
 
@@ -59,15 +81,15 @@ static void thread_set_state(struct thread* t, int s){
 		  t->state, thread_state_string(t->state),
 		  s, thread_state_string(s));
 	t->state = s;
-	gettimeofday(r->state_time);
+	gettimeofday(&t->state_time, NULL);
 }
 
-static void request_goto_state(struct thread* t, int s){
+static void thread_goto_state(struct thread* t, int s){
 	thread_set_state(t, s);
-	request_process(r, NULL);
+	thread_process(t, NULL);
 }
 
-static void sf_begin(struct thread* t, struct epoll_event* ev){
+static void sf_begin(struct thread* t){
 	t->peerfd = nonblock_connect(&t->req->dst);
 	if(t->peerfd > 0){
 		struct epoll_event ev;
@@ -86,100 +108,86 @@ static void sf_begin(struct thread* t, struct epoll_event* ev){
 	}
 }
 
-static void sf_connecting(struct thread* t, struct epoll_event* ev){
-	r->writepos = 0;
+static void sf_connecting(struct thread* t){
+	t->write_pos = 0;
 	thread_goto_state(t, THREAD_ST_HEADER_SENDING);
 }
 
-static void sf_header_sending(struct thread* t, struct epoll_event* ev){
-	switch(nonblock_write(r->peerfd, r->header,
-				      &(r->writepos), r->header_len,
-				      &r->stat)){
-		case WRITE_DONE:{
-#ifdef IGNORE_RESPONSE
-			// if we don't care about resp
-			request_goto_state(r, REQST_END, epollfd);
-#else
-			struct epoll_event ev;
-			ev.data.ptr = (void*)r;
-			ev.events = EPOLLIN | EPOLLET;
-			if(0 == epoll_ctl(epollfd, EPOLL_CTL_MOD, r->peerfd, &ev)){
-				request_set_state(r, REQST_HEADER_READING);
-			}
-			else{
-				print_dbg("epoll_ctl(mod): %s", strerror(errno));
-				request_set_state(r, REQST_END);
-			}
-#endif
-		}
-			break;
-		case WRITE_PARTIAL:
-			break;
-		case WRITE_FAIL:
-			request_goto_state(r, REQST_END, epollfd);
-			break;
-		}
-		break;
+static void sf_header_sending(struct thread* t){
+	int n = write(
+		t->peerfd,
+		t->req->req + t->write_pos,
+		t->req->req_len - t->write_pos);
+	++t->stat.txn;
+	t->stat.tx += n;
 
-	case REQST_HEADER_READING:
-		if(r->resp_len >= LEN(r->resp)){
-			print_dbg("Response [%d>=%lu] too long.",
-				  r->resp_len, LEN(r->resp));
-			request_goto_state(r, REQST_END, epollfd);
+	if(n == t->req->req_len - t->write_pos){
+#ifdef IGNORE_RESPONSE
+		// if we don't care about resp
+		thread_goto_state(r, THREAD_ST_DONE);
+#else
+		struct epoll_event ev;
+		ev.data.ptr = (void*)t;
+		ev.events = EPOLLIN | EPOLLET;
+		if(0 == epoll_ctl(t->epollfd, EPOLL_CTL_MOD, t->peerfd, &ev)){
+			thread_set_state(t, THREAD_ST_HEADER_READING);
 		}
 		else{
-			int n;
-			do{
-				n = read(r->peerfd, r->resp + r->resp_len,
-					 LEN(r->resp) - r->resp_len - 1);
-				if(n > 0){
-					char *a;
-					// fwrite(r->resp + r->resp_len, n, 1, stdout);
-					r->resp_len += n;
-					++r->stat.rxn;
-					r->stat.rx += n;
-					r->resp[r->resp_len] = '\0';
-					// search for key words!!
-
-					// tmp = r->resp[20];
-					// r->resp[20] = '\0';
-					print_dbg("Reply[%d])", r->resp_len);
-					// r->resp[20] = tmp;
-					r->resp_len = 0;
-					a = strrchr(r->resp, '/');
-					if(a){
-						print_dbg("Reply[%d]: %s",
-							  r->resp_len, a);
-						if(0 == memcmp(a-1, "</html>",
-							       strlen("</html>"))){
-							request_goto_state(
-								r, REQST_END, epollfd);
-							break;
-						}
-					}
-
-				}
-				else if(errno != EAGAIN && errno != EWOULDBLOCK){
-					if(errno != EINPROGRESS){
-						perror("read");
-					}
-					request_goto_state(r, REQST_END, epollfd);
-				}
-			}while(n > 0);
+			perror("epoll_ctl(mod)");
+			thread_goto_state(t, THREAD_ST_ERROR);
 		}
-		break;
-	case REQST_END:
-		++r->stat.count;
-		epoll_ctl(epollfd, EPOLL_CTL_DEL, r->peerfd, NULL);
-		close(r->peerfd);
-		// fall through
+#endif
 	}
-
-void request_connect(struct request* r, struct sockaddr_in const* sa, int epollfd,
-		     int s_ok, int s_fail)
-{
+	else if(n < 0){
+		perror("write");
+		t->stat.tx -= n; // undo
+		thread_goto_state(t, THREAD_ST_ERROR);
+	}
 }
 
-void request_process(struct request* r, struct epoll_event const* ev, int epollfd)
-{
+static void sf_header_reading(struct thread* t){
+	int n;
+	do{
+		n = read(t->peerfd,
+			 t->resp + t->read_pos,
+			 LEN(t->resp) - t->read_pos - 1);
+		if(n >= 0){
+			char *a;
+
+			t->read_pos += n;
+			t->resp[t->read_pos] = '\0';
+
+			++t->stat.rxn;
+			t->stat.rx += n;
+
+			print_dbg("Reply[%d])", t->read_pos);
+			t->read_pos = 0;
+			a = strrchr(t->resp, '/');
+			if(a){
+				print_dbg("Reply[%d]: %s", t->resp_len, a);
+				if(0 == memcmp(a-1, "</html>", strlen("</html>"))){
+					thread_goto_state(t, THREAD_ST_DONE);
+					break;
+				}
+			}
+		}
+		else if(errno != EAGAIN && errno != EWOULDBLOCK){
+			if(errno != EINPROGRESS){
+				perror("read");
+			}
+			thread_goto_state(t, THREAD_ST_ERROR);
+		}
+	}while(n > 0);
+}
+
+static void sf_done(struct thread* t){
+	++t->stat.count;
+	epoll_ctl(t->epollfd, EPOLL_CTL_DEL, t->peerfd, NULL);
+	close(t->peerfd);
+	thread_goto_state(t, THREAD_ST_BEGIN);
+}
+
+static void sf_error(struct thread* t){
+	++t->stat.error;
+	thread_goto_state(t, THREAD_ST_DONE);
 }

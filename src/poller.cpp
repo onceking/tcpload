@@ -44,7 +44,7 @@ void poller_run(struct poller* p, unsigned duration, unsigned trans){
 				request_process(r, &ev, p->epollfd); //, &p->stat);
 			}
 			dur = time_elasped(&poll_beg);
-		}while(dur < 1);
+		}while(dur < 1000);
 
 		dur = time(NULL) - p->stat.beg;
 
