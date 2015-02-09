@@ -19,16 +19,6 @@
 #include "poller.h"
 #include "req.h"
 
-char const* REQST_STRS[] = {
-	"BEGIN",
-	"CONNECTING",
-	"CONNECTED",
-	"SENDING_HEADER",
-	"READING_HEADER",
-	"READING_BODY",
-	"END"
-};
-
 int main(int argc, char* argv[])
 {
 	struct poller p;
@@ -62,7 +52,32 @@ int main(int argc, char* argv[])
 
 	for(i=0; i<p.threads; ++i)
 	{
-		struct request* r = request_create(argv[4], &sockaddr);
+		struct request r;
+		memset(&r, 0, sizeof(r));
+
+	{
+		memcpy(&(r->dst), dst, sizeof(r->dst));
+		inet_ntop(AF_INET, &(dst->sin_addr), r->ipstr, LEN(r->ipstr));
+
+		r->path = (char*)malloc(strlen(path) + 1);
+		memcpy(r->path, path, strlen(path) + 1);
+
+		r->header_len =
+			snprintf(r->header, LEN(r->header),
+				 "GET %s HTTP/1.1\r\n"
+				 "Host: www.bloomberg.com\r\n"
+				 "Connection: close\r\n"
+				 "User-Agent: http-bomb 1.0\r\n"
+				 "\r\n",
+				 r->path);
+		assert(r->header_len < LEN(r->header));
+
+		request_set_state(r, REQST_BEGIN);
+	}
+
+	return r;
+}
+struct request* r = request_create(argv[4], &sockaddr);
 		assert(r);
 		p.reqs.push_back(r);
 	}

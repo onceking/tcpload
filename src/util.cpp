@@ -64,9 +64,9 @@ int nonblock_write(int fd, char const* buf, long* offset, long len, struct stats
 	return WRITE_FAIL;
 }
 
-double time_elasped(struct timeval const* beg){
+int time_elasped(struct timeval const* beg){
 	struct timeval end;
 	gettimeofday(&end, NULL);
-	return (end.tv_sec - beg->tv_sec) +
-		(end.tv_usec - beg->tv_usec)/1000000.0;
+	return (end.tv_sec - beg->tv_sec)*1000 +
+		(end.tv_usec - beg->tv_usec)/1000;
 }
