@@ -50,18 +50,29 @@ int nonblock_connect(struct sockaddr_in const* dst){
 	return soc;
 }
 
-int nonblock_write(int fd, char const* buf, long* offset, long len, struct stats* stat){
-	int n = write(fd, buf+(*offset), len-(*offset));
+int nonblock_write(int fd, char const* buf, long len, struct stats* stat){
+	int n = write(fd, buf, len);
+	++stat->txn;
 	if(n > 0){
 		stat->tx += n;
-		++stat->txn;
-		*offset += n;
-		assert(*offset <= len);
-		return *offset == len ? WRITE_DONE :WRITE_PARTIAL;
 	}
+	else{
+		print_dbg("write[%d]: %s", errno, strerror(errno));
+	}
+	return n;
+}
 
-	print_dbg("write[%d]: %s", errno, strerror(errno));
-	return WRITE_FAIL;
+int nonblock_read(int fd, char *buf, long len, struct stats* stat){
+	int n = read(fd, buf, len);
+	++stat->rxn;
+	if(n > 0){
+		stat->rx += n;
+		print_dbg("Reply[%d])", r->resp_len);
+	}
+	else{
+		print_dbg("read[%d]: %s", errno, strerror(errno));
+	}
+	return n;
 }
 
 int time_elasped(struct timeval const* beg){

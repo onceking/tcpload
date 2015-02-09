@@ -25,12 +25,7 @@
 
 double time_elasped(struct timeval const*);
 int nonblock_connect(struct sockaddr_in const*);
-
-enum {
-	WRITE_DONE = 0,
-	WRITE_PARTIAL,
-	WRITE_FAIL
-};
-int nonblock_write(int fd, char const*, long*, long, struct stats*);
+inline int nonblock_write(int fd, char const*, long, struct stats*);
+inline int nonblock_read(int fd, char*, long, struct stats*);
 
 #endif
