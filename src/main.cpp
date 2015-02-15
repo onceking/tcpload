@@ -55,6 +55,7 @@ int main(int argc, char* argv[])
 			 "User-Agent: http-bomb 1.0\r\n"
 			 "\r\n",
 			 argv[4]);
+	req.timeout_ms = 100000;
 	p.reqs.push_back(req);
 
 	printf("Will use %d threads to generate traffic to http://%s:%s%s\n",

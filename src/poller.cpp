@@ -7,6 +7,8 @@
 
 void poller_run(struct poller* p, unsigned duration, unsigned trans){
 	double dur = 0.;
+	int i;
+
 	p->epollfd = epoll_create1(EPOLL_CLOEXEC);
 	if(p->epollfd == -1){
 		perror("epoll_create");
@@ -15,11 +17,14 @@ void poller_run(struct poller* p, unsigned duration, unsigned trans){
 
 	p->events.resize(p->reqs.size());
 	time(&p->stat.beg);
+	for(i=0; i<p->threads.size(); ++i){
+		p->threads[i].epollfd = p->epollfd;
+		p->threads[i].req = &p->reqs[0];
+	}
 
 	while((trans == 0 || p->stat.count > trans) &&
 	      (duration == 0 || duration > dur)){
 		struct timeval poll_beg;
-		int i;
 
 		for(i=0; i<p->threads.size(); ++i){
 			thread_housekeep(&p->threads[i]); //, &p->stat);

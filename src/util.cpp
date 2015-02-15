@@ -17,32 +17,30 @@ int nonblock_connect(struct sockaddr_in const* dst){
 	// @todo comment out
 	print_dbg("Connecting to %s:%d", ip, ntohs(dst->sin_port));
 
-	soc = socket( AF_INET, SOCK_STREAM, 0);
-	if(soc < 0)
-	{
-     		print_dbg("socket: %s", strerror(errno));
+	soc = socket(AF_INET, SOCK_STREAM, 0);
+	if(soc < 0){
+     		perror("socket");
 		return -1;
 	}
 
-	if((sockopt = fcntl(soc, F_GETFL, NULL)) < 0)
-	{
-     		print_dbg("Error fcntl(..., F_GETFL): %s", strerror(errno));
+	if((sockopt = fcntl(soc, F_GETFL, NULL)) < 0){
+     		perror("fcntl(F_GETFL)");
 		close(soc);
      		return -1;
 	}
 	sockopt |= O_NONBLOCK;
-	if(fcntl(soc, F_SETFL, sockopt) < 0)
-	{
-     		print_dbg("Error fcntl(..., F_SETFL): %s", strerror(errno));
+	if(fcntl(soc, F_SETFL, sockopt) < 0){
+     		print_dbg("fcntl(F_SETFL)");
 		close(soc);
     		return -1;
 	}
 
-	if(0 == connect(soc, (struct sockaddr*)dst, sizeof(*dst)))
+	if(0 == connect(soc, (struct sockaddr*)dst, sizeof(*dst))){
 		return soc;
+	}
 
 	if(errno != EINPROGRESS){
-		print_dbg("connect[%d]: %s", errno, strerror(errno));
+		perror("connect");
 		close(soc);
 		return -1;
 	}

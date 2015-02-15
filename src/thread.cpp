@@ -10,8 +10,34 @@
 #include "thread.h"
 #include "util.h"
 
-static void thread_set_state(struct thread*, int);
-static void thread_goto_state(struct thread*, int);
+#ifdef DEBUG
+#define thread_set_state(t, s) do{				\
+	print_dbg("%p: advanced from [%d]%s to [%d]%s. ",	\
+		  (t),						\
+		  (t)->state, thread_state_string((t)->state),	\
+		  (s), thread_state_string(s));			\
+	(t)->state = s;						\
+	gettimeofday(&(t)->state_time, NULL);			\
+	}while(0)
+
+#define thread_goto_state(t, s) do{		\
+	thread_set_state((t), (s));		\
+	thread_process((t), NULL);		\
+	}while(0)
+#else
+static void thread_set_state(struct thread* t, int s){
+	print_dbg("%p: advanced from [%d]%s to [%d]%s. ",
+		  t,
+		  t->state, thread_state_string(t->state),
+		  s, thread_state_string(s));
+	t->state = s;
+	gettimeofday(&t->state_time, NULL);
+}
+static void thread_goto_state(struct thread* t, int s){
+	thread_set_state(t, s);
+	thread_process(t, NULL);
+}
+#endif
 
 static void sf_begin(struct thread*);
 static void sf_connecting(struct thread*);
@@ -26,14 +52,13 @@ char const* thread_state_string(int st){
 		"SENDING_DNS",
 		"READING_DNS",
 		"CONNECTING",
-		"CONNECTED",
 		"SENDING_HEADER",
 		"READING_HEADER",
 		"READING_BODY",
 		"DONE",
 		"ERROR"
 	};
-
+	assert(LEN(strs) == THREAD_ST_COUNT);
 	assert(st < THREAD_ST_COUNT);
 
 	return strs[st];
@@ -75,23 +100,9 @@ void thread_housekeep(struct thread* t){
 	}
 }
 
-static void thread_set_state(struct thread* t, int s){
-	print_dbg("%p: advanced from [%d]%s to [%d]%s. ",
-		  t,
-		  t->state, thread_state_string(t->state),
-		  s, thread_state_string(s));
-	t->state = s;
-	gettimeofday(&t->state_time, NULL);
-}
-
-static void thread_goto_state(struct thread* t, int s){
-	thread_set_state(t, s);
-	thread_process(t, NULL);
-}
-
 static void sf_begin(struct thread* t){
 	t->peerfd = nonblock_connect(&t->req->dst);
-	if(t->peerfd > 0){
+	if(t->peerfd >= 0){
 		struct epoll_event ev;
 		ev.events = EPOLLOUT | EPOLLHUP;
 		ev.data.ptr = (void*)t;
@@ -160,7 +171,7 @@ static void sf_header_reading(struct thread* t){
 			++t->stat.rxn;
 			t->stat.rx += n;
 
-			print_dbg("Reply[%d])", t->read_pos);
+			print_dbg("Reply[%d]", t->read_pos);
 			t->read_pos = 0;
 			a = strrchr(t->resp, '/');
 			if(a){
