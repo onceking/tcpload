@@ -2,7 +2,7 @@
 #define STATS_H
 
 #include <time.h>
-
+#include <stdint.h>
 struct stats{
 	time_t beg;
 	uint64_t tx;
@@ -13,16 +13,6 @@ struct stats{
 	uint64_t error;
 };
 
-void stats_add(struct stats* a, struct stats const* b){
-	a->tx    += b->tx;
-	a->txn   += b->txn;
-	a->rx    += b->rx;
-	a->rxn   += b->rxn;
-	a->count += b->count;
-	a->error += b->error;
-}
-
-void stats_clear(struct stats* s){
-	memset(s, 0, sizeof(struct stats));
-}
+void stats_add(struct stats*, struct stats const*);
+void stats_clear(struct stats*);
 #endif

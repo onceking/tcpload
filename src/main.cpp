@@ -17,12 +17,13 @@
 
 #include "util.h"
 #include "poller.h"
-#include "req.h"
+#include "request.h"
 
 int main(int argc, char* argv[])
 {
 	struct poller p;
-	struct sockaddr_in sockaddr;
+	int threads;
+	struct request req;
 	int i;
 
 	if (argc <= 4) {
@@ -40,46 +41,28 @@ int main(int argc, char* argv[])
 
 	signal(SIGPIPE, SIG_IGN); // ignore broken pipe.
 
-	p.threads = atoi(argv[1]);
-	assert(p.threads > 0);
+	threads = atoi(argv[1]);
+	assert(threads > 0);
 
-	inet_pton(AF_INET, argv[2], &(sockaddr.sin_addr));
-	sockaddr.sin_family = AF_INET;
-	sockaddr.sin_port = htons(atoi(argv[3]));
+	inet_pton(AF_INET, argv[2], &req.dst.sin_addr);
+	req.dst.sin_family = AF_INET;
+	req.dst.sin_port = htons(atoi(argv[3]));
+	req.req_len =
+		snprintf(req.req, LEN(req.req),
+			 "GET %s HTTP/1.1\r\n"
+			 "Host: www.bloomberg.com\r\n"
+			 "Connection: close\r\n"
+			 "User-Agent: http-bomb 1.0\r\n"
+			 "\r\n",
+			 argv[4]);
+	p.reqs.push_back(req);
 
 	printf("Will use %d threads to generate traffic to http://%s:%s%s\n",
-	       p.threads, argv[2], argv[3], argv[4]);
+	       threads, argv[2], argv[3], argv[4]);
 
-	for(i=0; i<p.threads; ++i)
-	{
-		struct request r;
-		memset(&r, 0, sizeof(r));
-
-	{
-		memcpy(&(r->dst), dst, sizeof(r->dst));
-		inet_ntop(AF_INET, &(dst->sin_addr), r->ipstr, LEN(r->ipstr));
-
-		r->path = (char*)malloc(strlen(path) + 1);
-		memcpy(r->path, path, strlen(path) + 1);
-
-		r->header_len =
-			snprintf(r->header, LEN(r->header),
-				 "GET %s HTTP/1.1\r\n"
-				 "Host: www.bloomberg.com\r\n"
-				 "Connection: close\r\n"
-				 "User-Agent: http-bomb 1.0\r\n"
-				 "\r\n",
-				 r->path);
-		assert(r->header_len < LEN(r->header));
-
-		request_set_state(r, REQST_BEGIN);
-	}
-
-	return r;
-}
-struct request* r = request_create(argv[4], &sockaddr);
-		assert(r);
-		p.reqs.push_back(r);
+	for(i=0; i<threads; ++i){
+		struct thread th;
+		p.threads.push_back(th);
 	}
 
 	poller_run(&p, 10, 0);

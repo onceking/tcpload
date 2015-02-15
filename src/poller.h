@@ -11,11 +11,10 @@ struct poller {
 	std::vector<struct epoll_event> events;
 
 	std::vector<struct thread> threads;
+	std::vector<struct request> reqs;
 
 	struct stats stat;
 };
-
-void poller_add(struct poller*, struct request*);
 
 void poller_run(struct poller*, unsigned duration, unsigned trans);
 

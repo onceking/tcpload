@@ -5,11 +5,6 @@
 #include "util.h"
 #include "stats.h"
 
-void poller_add(struct poller* p, struct request* r){
-	p->reqs.push_back(r);
-
-}
-
 void poller_run(struct poller* p, unsigned duration, unsigned trans){
 	double dur = 0.;
 	p->epollfd = epoll_create1(EPOLL_CLOEXEC);
@@ -26,8 +21,8 @@ void poller_run(struct poller* p, unsigned duration, unsigned trans){
 		struct timeval poll_beg;
 		int i;
 
-		for(i=0; i<p->reqs.size(); ++i){
-			request_housekeep(p->reqs[i], p->epollfd); //, &p->stat);
+		for(i=0; i<p->threads.size(); ++i){
+			thread_housekeep(&p->threads[i]); //, &p->stat);
 		}
 
 		gettimeofday(&poll_beg, NULL);
@@ -39,9 +34,9 @@ void poller_run(struct poller* p, unsigned duration, unsigned trans){
 			// print_dbg("%d events ready", n);
 			for(i=0; i<n; ++i){
 				struct epoll_event& ev = p->events[i];
-				struct request* r = (struct request*)ev.data.ptr;
+				struct thread* th = (struct thread*)ev.data.ptr;
 				print_dbg("Event: %0x", ev.events);
-				request_process(r, &ev, p->epollfd); //, &p->stat);
+				thread_process(th, &ev); //, &p->stat);
 			}
 			dur = time_elasped(&poll_beg);
 		}while(dur < 1000);
@@ -54,16 +49,10 @@ void poller_run(struct poller* p, unsigned duration, unsigned trans){
 		p->stat.rxn = 0;
 		p->stat.count = 0;
 		for(i=0; i<p->reqs.size(); ++i){
-			struct stats const* s = request_stat(p->reqs[i]);
-			p->stat.tx += s->tx;
-			p->stat.txn += s->txn;
-			p->stat.rx += s->rx;
-			p->stat.rxn += s->rxn;
-			p->stat.count += s->count;
+			stats_add(&p->stat, &p->reqs[i].stat);
 		}
 
 		if(p->stat.txn > 0 && p->stat.rxn > 0){
-
 			printf("Time: %0.2fs  Req: %lu %.2f/s"
 			       " TX: %luKB/%lu %.0fkB/%.0f/s %lu/t"
 			       " RX: %luMB/%luk %.0fMB/%.0fk/s %lu/r\n",
